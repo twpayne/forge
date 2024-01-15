@@ -1,5 +1,10 @@
 package main
 
+// FIXME add named forges (e.g. github as an alias for github.com, as done for remotes)
+// FIXME should we read .config/forge/forge.toml on remote machine to get sourceDir?
+// FIXME add support for per-forge source dirs, i.e. src/src/go
+// FIXME add shortcuts
+
 import (
 	"errors"
 	"fmt"
