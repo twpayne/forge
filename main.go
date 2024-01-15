@@ -32,32 +32,6 @@ type Remote struct {
 
 var argRx = regexp.MustCompile(`\A((?:(?P<forge>[^/]+)/)?(?:(?P<user>[^/]+)/))?(?P<repo>[^/@]+)(?:@(?P<remote>[^/]+))?`) // FIXME use .*? instead of [^/] and [^/@]
 
-func execArgv(argv []string) error {
-	argv0, err := exec.LookPath(argv[0])
-	if err != nil {
-		return err
-	}
-	return unix.Exec(argv0, argv, os.Environ())
-}
-
-func runCommand(nameAndArgs ...string) error {
-	name, args := nameAndArgs[0], nameAndArgs[1:]
-	cmd := exec.Command(name, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func runCommands(commands [][]string) error {
-	for _, nameAndArgs := range commands {
-		if err := runCommand(nameAndArgs...); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func runMain() error {
 	bds, err := xdg.NewBaseDirectorySpecification()
 	if err != nil {
@@ -165,6 +139,14 @@ func main() {
 	}
 }
 
+func execArgv(argv []string) error {
+	argv0, err := exec.LookPath(argv[0])
+	if err != nil {
+		return err
+	}
+	return unix.Exec(argv0, argv, os.Environ())
+}
+
 func firstNonZero[E comparable](es ...E) E {
 	var zero E
 	for _, e := range es {
@@ -173,4 +155,22 @@ func firstNonZero[E comparable](es ...E) E {
 		}
 	}
 	return zero
+}
+
+func runCommand(nameAndArgs ...string) error {
+	name, args := nameAndArgs[0], nameAndArgs[1:]
+	cmd := exec.Command(name, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func runCommands(commands [][]string) error {
+	for _, nameAndArgs := range commands {
+		if err := runCommand(nameAndArgs...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
