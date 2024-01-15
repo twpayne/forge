@@ -3,7 +3,6 @@ package main
 // FIXME add named forges (e.g. github as an alias for github.com, as done for remotes)
 // FIXME should we read .config/forge/forge.toml on remote machine to get sourceDir?
 // FIXME add support for per-forge source dirs, i.e. src/src/go
-// FIXME add shortcuts
 
 import (
 	"errors"
@@ -28,12 +27,21 @@ type Config struct {
 	Editor    string            `toml:"editor"`
 	Forge     string            `toml:"forge"`
 	SourceDir string            `toml:"sourceDir"`
-	Remotes   map[string]Remote `toml:"remotes"`
+	Remotes   map[string]Remote `toml:"remote"`
+	Aliases   map[string]Alias  `toml:"alias"`
 }
 
 type Remote struct {
 	Hostname  string `toml:"hostname"`
 	SourceDir string `toml:"sourceDir"`
+}
+
+type Alias struct {
+	Forge   string `toml:"forge"`
+	User    string `toml:"user"`
+	Repo    string `toml:"repo"`
+	RepoDir string `toml:"repoDir"`
+	Remote  string `toml:"remote"`
 }
 
 var argRx = regexp.MustCompile(`\A((?:(?P<forge>[^/]+)/)?(?:(?P<user>[^/]+)/))?(?P<repo>[^/@]+)(?:@(?P<remote>[^/]+))?`) // FIXME use .*? instead of [^/] and [^/@]
@@ -69,9 +77,8 @@ FOR:
 	execShell := pflag.BoolP("shell", "s", false, "exec shell instead of editor")
 	verbose := pflag.BoolP("verbose", "v", false, "verbose")
 	pflag.Parse()
-
 	if pflag.NArg() != 1 {
-		return fmt.Errorf("syntax: %s [[forge/]user/]repo[@remote]", filepath.Base(os.Args[0]))
+		return fmt.Errorf("syntax: %s [flags] [[forge/]user/]repo[@remote]|alias", filepath.Base(os.Args[0]))
 	}
 
 	if *verbose {
@@ -80,14 +87,25 @@ FOR:
 		})))
 	}
 
-	match := argRx.FindStringSubmatch(pflag.Arg(0))
-	if len(match) == 0 {
-		return fmt.Errorf("%s: invalid argument", pflag.Arg(0))
+	arg := pflag.Arg(0)
+	var repoDir, forge, user, repo, remote string
+	if alias, ok := config.Aliases[arg]; ok {
+		repoDir = alias.RepoDir
+		forge = alias.Forge
+		user = alias.User
+		repo = alias.Repo
+		remote = alias.Remote
+		// FIXME allow overriding of sourceDir
+	} else {
+		match := argRx.FindStringSubmatch(arg)
+		if len(match) == 0 {
+			return fmt.Errorf("%s: invalid argument", arg)
+		}
+		forge = firstNonZero(match[argRx.SubexpIndex("forge")], config.Forge)
+		user = firstNonZero(match[argRx.SubexpIndex("user")], config.User)
+		repo = match[argRx.SubexpIndex("repo")]
+		remote = match[argRx.SubexpIndex("remote")]
 	}
-	forge := firstNonZero(match[argRx.SubexpIndex("forge")], config.Forge)
-	user := firstNonZero(match[argRx.SubexpIndex("user")], config.User)
-	repo := match[argRx.SubexpIndex("repo")]
-	remote := match[argRx.SubexpIndex("remote")]
 
 	if remote != "" {
 		var hostname string
@@ -95,12 +113,16 @@ FOR:
 			*sourceDir = firstNonZero(remoteConfig.SourceDir, *sourceDir)
 			hostname = firstNonZero(remoteConfig.Hostname, remote)
 		}
-		folderURI := "vscode-remote://ssh-remote+" + hostname + *sourceDir + "/" + forge + "/" + user + "/" + repo
+		if repoDir == "" {
+			repoDir = filepath.Join(*sourceDir, forge, user, repo)
+		}
+		folderURI := "vscode-remote://ssh-remote+" + hostname + repoDir
 		return execArgv([]string{*editor, "--folder-uri", folderURI})
-
 	}
 
-	repoDir := filepath.Join(*sourceDir, forge, user, repo)
+	if repoDir == "" {
+		repoDir = filepath.Join(*sourceDir, forge, user, repo)
+	}
 
 	switch _, err := os.Stat(repoDir); {
 	case errors.Is(err, fs.ErrNotExist):
