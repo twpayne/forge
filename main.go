@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,10 +62,17 @@ FOR:
 	sourceDir := pflag.StringP("source", "S", config.SourceDir, "source directory")
 	editor := pflag.StringP("editor", "e", config.Editor, "editor")
 	execShell := pflag.BoolP("shell", "s", false, "exec shell instead of editor")
+	verbose := pflag.BoolP("verbose", "v", false, "verbose")
 	pflag.Parse()
 
 	if pflag.NArg() != 1 {
 		return fmt.Errorf("syntax: %s [[forge/]user/]repo[@remote]", filepath.Base(os.Args[0]))
+	}
+
+	if *verbose {
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})))
 	}
 
 	match := argRx.FindStringSubmatch(pflag.Arg(0))
@@ -144,6 +152,7 @@ func execArgv(argv []string) error {
 	if err != nil {
 		return err
 	}
+	slog.Debug("exec", slog.String("argv0", argv0), slog.Any("argv", argv))
 	return unix.Exec(argv0, argv, os.Environ())
 }
 
@@ -163,6 +172,7 @@ func runCommand(nameAndArgs ...string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	slog.Debug("run", slog.String("name", name), slog.Any("args", args))
 	return cmd.Run()
 }
 
