@@ -7,4 +7,8 @@ require (
 	golang.org/x/sys v0.16.0
 )
 
-require github.com/twpayne/go-shell v0.4.0
+require (
+	github.com/pelletier/go-toml/v2 v2.1.1
+	github.com/twpayne/go-shell v0.4.0
+	github.com/twpayne/go-xdg/v6 v6.1.2
+)

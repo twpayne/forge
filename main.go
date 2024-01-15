@@ -9,17 +9,19 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/pflag"
 	"github.com/twpayne/go-shell"
+	"github.com/twpayne/go-xdg/v6"
 	"golang.org/x/sys/unix"
 )
 
-const (
-	defaultEditor    = "code"
-	defaultForge     = "github.com"
-	defaultSourceDir = "src"
-	defaultUser      = "twpayne"
-)
+type Config struct {
+	User      string `toml:"user"`
+	Editor    string `toml:"editor"`
+	Forge     string `toml:"forge"`
+	SourceDir string `toml:"sourceDir"`
+}
 
 func runCommand(nameAndArgs ...string) error {
 	name, args := nameAndArgs[0], nameAndArgs[1:]
@@ -40,14 +42,33 @@ func runCommands(commands [][]string) error {
 }
 
 func runMain() error {
-	homeDir, err := os.UserHomeDir()
+	bds, err := xdg.NewBaseDirectorySpecification()
 	if err != nil {
 		return err
 	}
 
+	var config Config
+FOR:
+	for _, configDir := range bds.ConfigDirs {
+		switch configFile, err := os.Open(filepath.Join(configDir, "forge", "forge.toml")); {
+		case errors.Is(err, fs.ErrNotExist):
+		case err != nil:
+			return err
+		default:
+			defer configFile.Close()
+			if err := toml.NewDecoder(configFile).Decode(&config); err != nil {
+				return err
+			}
+			break FOR
+		}
+	}
+	if config == (Config{}) {
+		return errors.New("no config")
+	}
+
 	create := pflag.BoolP("create", "c", false, "create repo")
-	srcDir := pflag.String("source", filepath.Join(homeDir, defaultSourceDir), "source directory")
-	editor := pflag.StringP("editor", "e", defaultEditor, "editor")
+	srcDir := pflag.String("source", config.SourceDir, "source directory")
+	editor := pflag.StringP("editor", "e", config.Editor, "editor")
 	execShell := pflag.BoolP("shell", "s", false, "exec shell instead of editor")
 	pflag.Parse()
 
@@ -58,9 +79,9 @@ func runMain() error {
 	var forge, user, repo string
 	switch components := strings.SplitN(pflag.Arg(0), "/", 3); len(components) {
 	case 1:
-		forge, user, repo = defaultForge, defaultUser, components[0]
+		forge, user, repo = config.Forge, config.User, components[0]
 	case 2:
-		forge, user, repo = defaultForge, components[0], components[1]
+		forge, user, repo = config.Forge, components[0], components[1]
 	case 3:
 		forge, user, repo = components[0], components[1], components[2]
 	}
@@ -70,7 +91,7 @@ func runMain() error {
 	switch _, err := os.Stat(repoDir); {
 	case errors.Is(err, fs.ErrNotExist):
 		var repoURL string
-		if user == defaultUser {
+		if user == config.User {
 			repoURL = "git@" + forge + ":" + user + "/" + repo + ".git"
 		} else {
 			repoURL = "https://" + forge + "/" + user + "/" + repo + ".git"
