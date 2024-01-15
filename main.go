@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/pflag"
@@ -118,6 +119,38 @@ FOR:
 		}
 		folderURI := "vscode-remote://ssh-remote+" + hostname + repoDir
 		return execArgv([]string{*editor, "--folder-uri", folderURI})
+	}
+
+	if forge != "" && user == "_" && repo != "" {
+		var candidateUsers []string
+		forgeDirEntries, err := os.ReadDir(filepath.Join(*sourceDir, forge))
+		if err != nil {
+			return err
+		}
+		for _, forgeDirEntry := range forgeDirEntries {
+			if !forgeDirEntry.IsDir() {
+				continue
+			}
+			candidateUser := forgeDirEntry.Name()
+			if candidateUser == "." || candidateUser == ".." {
+				continue
+			}
+			switch fileInfo, err := os.Stat(filepath.Join(*sourceDir, forge, candidateUser, repo)); {
+			case errors.Is(err, fs.ErrNotExist):
+			case err != nil:
+				return err
+			case fileInfo.IsDir():
+				candidateUsers = append(candidateUsers, candidateUser)
+			}
+		}
+		switch len(candidateUsers) {
+		case 0:
+			return fmt.Errorf("%s/_/%s: no user found", forge, repo)
+		case 1:
+			user = candidateUsers[0]
+		default:
+			return fmt.Errorf("%s/_/%s: multiple users found: %s", forge, repo, strings.Join(candidateUsers, ", "))
+		}
 	}
 
 	if repoDir == "" {
