@@ -8,7 +8,13 @@ require (
 )
 
 require (
+	github.com/alecthomas/assert/v2 v2.4.1
 	github.com/pelletier/go-toml/v2 v2.1.1
 	github.com/twpayne/go-shell v0.4.0
 	github.com/twpayne/go-xdg/v6 v6.1.2
+)
+
+require (
+	github.com/alecthomas/repr v0.3.0 // indirect
+	github.com/hexops/gotextdiff v1.0.3 // indirect
 )

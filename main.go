@@ -7,7 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"reflect"
+	"regexp"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/pflag"
@@ -17,10 +18,26 @@ import (
 )
 
 type Config struct {
-	User      string `toml:"user"`
-	Editor    string `toml:"editor"`
-	Forge     string `toml:"forge"`
+	User      string            `toml:"user"`
+	Editor    string            `toml:"editor"`
+	Forge     string            `toml:"forge"`
+	SourceDir string            `toml:"sourceDir"`
+	Remotes   map[string]Remote `toml:"remotes"`
+}
+
+type Remote struct {
+	Hostname  string `toml:"hostname"`
 	SourceDir string `toml:"sourceDir"`
+}
+
+var argRx = regexp.MustCompile(`\A((?:(?P<forge>[^/]+)/)?(?:(?P<user>[^/]+)/))?(?P<repo>[^/@]+)(?:@(?P<remote>[^/]+))?`) // FIXME use .*? instead of [^/] and [^/@]
+
+func execArgv(argv []string) error {
+	argv0, err := exec.LookPath(argv[0])
+	if err != nil {
+		return err
+	}
+	return unix.Exec(argv0, argv, os.Environ())
 }
 
 func runCommand(nameAndArgs ...string) error {
@@ -62,31 +79,41 @@ FOR:
 			break FOR
 		}
 	}
-	if config == (Config{}) {
+	if reflect.ValueOf(config).IsZero() {
 		return errors.New("no config")
 	}
 
 	create := pflag.BoolP("create", "c", false, "create repo")
-	srcDir := pflag.String("source", config.SourceDir, "source directory")
+	sourceDir := pflag.StringP("source", "S", config.SourceDir, "source directory")
 	editor := pflag.StringP("editor", "e", config.Editor, "editor")
 	execShell := pflag.BoolP("shell", "s", false, "exec shell instead of editor")
 	pflag.Parse()
 
 	if pflag.NArg() != 1 {
-		return fmt.Errorf("syntax: %s [[forge/]user/]repo", filepath.Base(os.Args[0]))
+		return fmt.Errorf("syntax: %s [[forge/]user/]repo[@remote]", filepath.Base(os.Args[0]))
 	}
 
-	var forge, user, repo string
-	switch components := strings.SplitN(pflag.Arg(0), "/", 3); len(components) {
-	case 1:
-		forge, user, repo = config.Forge, config.User, components[0]
-	case 2:
-		forge, user, repo = config.Forge, components[0], components[1]
-	case 3:
-		forge, user, repo = components[0], components[1], components[2]
+	match := argRx.FindStringSubmatch(pflag.Arg(0))
+	if len(match) == 0 {
+		return fmt.Errorf("%s: invalid argument", pflag.Arg(0))
+	}
+	forge := firstNonZero(match[argRx.SubexpIndex("forge")], config.Forge)
+	user := firstNonZero(match[argRx.SubexpIndex("user")], config.User)
+	repo := match[argRx.SubexpIndex("repo")]
+	remote := match[argRx.SubexpIndex("remote")]
+
+	if remote != "" {
+		var hostname string
+		if remoteConfig, ok := config.Remotes[remote]; ok {
+			*sourceDir = firstNonZero(remoteConfig.SourceDir, *sourceDir)
+			hostname = firstNonZero(remoteConfig.Hostname, remote)
+		}
+		folderURI := "vscode-remote://ssh-remote+" + hostname + *sourceDir + "/" + forge + "/" + user + "/" + repo
+		return execArgv([]string{*editor, "--folder-uri", folderURI})
+
 	}
 
-	repoDir := filepath.Join(*srcDir, forge, user, repo)
+	repoDir := filepath.Join(*sourceDir, forge, user, repo)
 
 	switch _, err := os.Stat(repoDir); {
 	case errors.Is(err, fs.ErrNotExist):
@@ -125,11 +152,7 @@ FOR:
 	} else {
 		argv = []string{*editor, repoDir}
 	}
-	argv0, err := exec.LookPath(argv[0])
-	if err != nil {
-		return err
-	}
-	return unix.Exec(argv0, argv, os.Environ())
+	return execArgv(argv)
 }
 
 func main() {
@@ -140,4 +163,14 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func firstNonZero[E comparable](es ...E) E {
+	var zero E
+	for _, e := range es {
+		if e != zero {
+			return e
+		}
+	}
+	return zero
 }
