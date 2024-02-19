@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -77,6 +78,7 @@ FOR:
 	editor := pflag.StringP("editor", "e", config.Editor, "editor")
 	execShell := pflag.BoolP("shell", "s", false, "exec shell instead of editor")
 	verbose := pflag.BoolP("verbose", "v", false, "verbose")
+	web := pflag.BoolP("web", "w", false, "open in web browser")
 	pflag.Parse()
 	if pflag.NArg() != 1 {
 		return fmt.Errorf("syntax: %s [flags] [[forge/]user/]repo[@remote]|alias", filepath.Base(os.Args[0]))
@@ -150,6 +152,16 @@ FOR:
 			user = candidateUsers[0]
 		default:
 			return fmt.Errorf("%s/_/%s: multiple users found: %s", forge, repo, strings.Join(candidateUsers, ", "))
+		}
+	}
+
+	if *web {
+		repoURL := "https://" + forge + "/" + user + "/" + repo
+		switch runtime.GOOS {
+		case "darwin":
+			return exec.Command("open", repoURL).Run()
+		default:
+			return xdg.Open(repoURL)
 		}
 	}
 
