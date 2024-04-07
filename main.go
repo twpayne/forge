@@ -1,18 +1,15 @@
 package main
 
 // FIXME add named forges (e.g. github as an alias for github.com, as done for remotes)
-// FIXME should we read .config/forge/forge.toml on remote machine to get sourceDir?
 // FIXME add support for per-forge source dirs, i.e. src/src/go
 
 import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"reflect"
+	"path"
 	"regexp"
 	"runtime"
 	"strings"
@@ -24,21 +21,23 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var argRx = regexp.MustCompile(`\A((?:(?P<forge>[^/]+)/)?(?:(?P<user>[^/]+)/))?(?P<repo>[^/@]+)(?:@(?P<remote>[^/]+))?`) // FIXME use .*? instead of [^/] and [^/@]
+
 type Config struct {
-	User      string            `toml:"user"`
-	Editor    string            `toml:"editor"`
-	Forge     string            `toml:"forge"`
-	SourceDir string            `toml:"sourceDir"`
-	Remotes   map[string]Remote `toml:"remote"`
-	Aliases   map[string]Alias  `toml:"alias"`
+	User      string                  `toml:"user"`
+	Editor    string                  `toml:"editor"`
+	Forge     string                  `toml:"forge"`
+	SourceDir string                  `toml:"sourceDir"`
+	Remotes   map[string]RemoteConfig `toml:"remote"`
+	Aliases   map[string]AliasConfig  `toml:"alias"`
 }
 
-type Remote struct {
+type RemoteConfig struct {
 	Hostname  string `toml:"hostname"`
 	SourceDir string `toml:"sourceDir"`
 }
 
-type Alias struct {
+type AliasConfig struct {
 	Forge   string `toml:"forge"`
 	User    string `toml:"user"`
 	Repo    string `toml:"repo"`
@@ -46,186 +45,72 @@ type Alias struct {
 	Remote  string `toml:"remote"`
 }
 
-var argRx = regexp.MustCompile(`\A((?:(?P<forge>[^/]+)/)?(?:(?P<user>[^/]+)/))?(?P<repo>[^/@]+)(?:@(?P<remote>[^/]+))?`) // FIXME use .*? instead of [^/] and [^/@]
+type Repo struct {
+	Forge     string
+	User      string
+	Repo      string
+	RepoDir   string
+	Remote    string
+	SourceDir string
+	Hostname  string
+}
 
-func runMain() error {
-	bds, err := xdg.NewBaseDirectorySpecification()
+func newConfigFromFile(name string) (*Config, error) {
+	data, err := os.ReadFile(name)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var c Config
+	if err := toml.Unmarshal(data, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
 
-	var config Config
-FOR:
-	for _, configDir := range bds.ConfigDirs {
-		switch configFile, err := os.Open(filepath.Join(configDir, "forge", "forge.toml")); {
-		case errors.Is(err, fs.ErrNotExist):
-		case err != nil:
-			return err
-		default:
-			defer configFile.Close()
-			if err := toml.NewDecoder(configFile).Decode(&config); err != nil {
-				return err
-			}
-			break FOR
+func (c *Config) parseRepoFromArg(arg string) (*Repo, error) {
+	var repo Repo
+	if alias, ok := c.Aliases[arg]; ok {
+		repo = Repo{
+			RepoDir: alias.RepoDir,
+			Forge:   firstNonZero(alias.Forge, c.Forge),
+			User:    firstNonZero(alias.User, c.User),
+			Repo:    alias.Repo,
+			Remote:  alias.Remote,
 		}
-	}
-	if reflect.ValueOf(config).IsZero() {
-		return errors.New("no config")
-	}
-
-	create := pflag.BoolP("create", "c", false, "create repo")
-	sourceDir := pflag.StringP("source", "S", config.SourceDir, "source directory")
-	editor := pflag.StringP("editor", "e", config.Editor, "editor")
-	execShell := pflag.BoolP("shell", "s", false, "exec shell instead of editor")
-	verbose := pflag.BoolP("verbose", "v", false, "verbose")
-	web := pflag.BoolP("web", "w", false, "open in web browser")
-	pflag.Parse()
-	if pflag.NArg() != 1 {
-		return fmt.Errorf("syntax: %s [flags] [[forge/]user/]repo[@remote]|alias", filepath.Base(os.Args[0]))
-	}
-
-	if *verbose {
-		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		})))
-	}
-
-	arg := pflag.Arg(0)
-	var repoDir, forge, user, repo, remote string
-	if alias, ok := config.Aliases[arg]; ok {
-		repoDir = alias.RepoDir
-		forge = alias.Forge
-		user = alias.User
-		repo = alias.Repo
-		remote = alias.Remote
-		// FIXME allow overriding of sourceDir
 	} else {
 		match := argRx.FindStringSubmatch(arg)
 		if len(match) == 0 {
-			return fmt.Errorf("%s: invalid argument", arg)
+			return nil, fmt.Errorf("%s: invalid argument", arg)
 		}
-		forge = firstNonZero(match[argRx.SubexpIndex("forge")], config.Forge)
-		user = firstNonZero(match[argRx.SubexpIndex("user")], config.User)
-		repo = match[argRx.SubexpIndex("repo")]
-		remote = match[argRx.SubexpIndex("remote")]
-	}
-
-	if remote != "" {
-		var hostname string
-		if remoteConfig, ok := config.Remotes[remote]; ok {
-			*sourceDir = firstNonZero(remoteConfig.SourceDir, *sourceDir)
-			hostname = firstNonZero(remoteConfig.Hostname, remote)
-		}
-		if repoDir == "" {
-			repoDir = filepath.Join(*sourceDir, forge, user, repo)
-		}
-		folderURI := "vscode-remote://ssh-remote+" + hostname + repoDir
-		return execArgv([]string{*editor, "--folder-uri", folderURI})
-	}
-
-	if forge != "" && user == "_" && repo != "" {
-		var candidateUsers []string
-		forgeDirEntries, err := os.ReadDir(filepath.Join(*sourceDir, forge))
-		if err != nil {
-			return err
-		}
-		for _, forgeDirEntry := range forgeDirEntries {
-			if !forgeDirEntry.IsDir() {
-				continue
-			}
-			candidateUser := forgeDirEntry.Name()
-			if candidateUser == "." || candidateUser == ".." {
-				continue
-			}
-			switch fileInfo, err := os.Stat(filepath.Join(*sourceDir, forge, candidateUser, repo)); {
-			case errors.Is(err, fs.ErrNotExist):
-			case err != nil:
-				return err
-			case fileInfo.IsDir():
-				candidateUsers = append(candidateUsers, candidateUser)
-			}
-		}
-		switch len(candidateUsers) {
-		case 0:
-			return fmt.Errorf("%s/_/%s: no user found", forge, repo)
-		case 1:
-			user = candidateUsers[0]
-		default:
-			return fmt.Errorf("%s/_/%s: multiple users found: %s", forge, repo, strings.Join(candidateUsers, ", "))
+		repo = Repo{
+			Forge:  firstNonZero(match[argRx.SubexpIndex("forge")], c.Forge),
+			User:   firstNonZero(match[argRx.SubexpIndex("user")], c.User),
+			Repo:   match[argRx.SubexpIndex("repo")],
+			Remote: match[argRx.SubexpIndex("remote")],
 		}
 	}
-
-	if *web {
-		repoURL := "https://" + forge + "/" + user + "/" + repo
-		switch runtime.GOOS {
-		case "darwin":
-			return exec.Command("open", repoURL).Run()
-		default:
-			return xdg.Open(repoURL)
-		}
+	if remoteConfig, ok := c.Remotes[repo.Remote]; ok {
+		repo.SourceDir = firstNonZero(remoteConfig.SourceDir, c.SourceDir)
+		repo.Hostname = remoteConfig.Hostname
 	}
-
-	if repoDir == "" {
-		repoDir = filepath.Join(*sourceDir, forge, user, repo)
+	if repo.RepoDir == "" {
+		sourceDir := firstNonZero(repo.SourceDir, c.SourceDir)
+		repo.RepoDir = path.Join(sourceDir, repo.Forge, repo.User, repo.Repo)
 	}
-
-	switch _, err := os.Stat(repoDir); {
-	case errors.Is(err, fs.ErrNotExist):
-		var repoURL string
-		if user == config.User {
-			repoURL = "git@" + forge + ":" + user + "/" + repo + ".git"
-		} else {
-			repoURL = "https://" + forge + "/" + user + "/" + repo + ".git"
-		}
-		var commands [][]string
-		if *create {
-			commands = [][]string{
-				{"git", "init", repoDir},
-				{"git", "remote", "add", "origin", repoURL},
-			}
-		} else {
-			commands = [][]string{
-				{"git", "clone", repoURL, repoDir},
-			}
-		}
-		if err := runCommands(commands); err != nil {
-			return err
-		}
-	case err != nil:
-		return err
-	}
-
-	if err := os.Chdir(repoDir); err != nil {
-		return err
-	}
-
-	var argv []string
-	if *execShell {
-		currentUserShell, _ := shell.CurrentUserShell()
-		argv = []string{currentUserShell}
-	} else {
-		argv = []string{*editor, repoDir}
-	}
-	return execArgv(argv)
+	return &repo, nil
 }
 
-func main() {
-	switch err, exitError := runMain(), (&exec.ExitError{}); {
-	case errors.As(err, &exitError):
-		os.Exit(exitError.ExitCode())
-	case err != nil:
-		fmt.Println(err)
-		os.Exit(1)
-	}
+func (r *Repo) goDocURL() string {
+	// FIXME add package version
+	return "https://pkg.go.dev/" + r.Forge + "/" + r.User + "/" + r.Repo
 }
 
-func execArgv(argv []string) error {
-	argv0, err := exec.LookPath(argv[0])
-	if err != nil {
-		return err
-	}
-	slog.Debug("exec", slog.String("argv0", argv0), slog.Any("argv", argv))
-	return unix.Exec(argv0, argv, os.Environ())
+func (r *Repo) url() string {
+	return "https://" + r.Forge + "/" + r.User + "/" + r.Repo
+}
+
+func (r *Repo) vsCodeRemoteURL() string {
+	return "vscode-remote://ssh-remote+" + r.Hostname + r.RepoDir
 }
 
 func firstNonZero[E comparable](es ...E) E {
@@ -238,21 +123,183 @@ func firstNonZero[E comparable](es ...E) E {
 	return zero
 }
 
-func runCommand(nameAndArgs ...string) error {
-	name, args := nameAndArgs[0], nameAndArgs[1:]
-	cmd := exec.Command(name, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	slog.Debug("run", slog.String("name", name), slog.Any("args", args))
-	return cmd.Run()
-}
+func run() error {
+	bds, err := xdg.NewBaseDirectorySpecification()
+	if err != nil {
+		return err
+	}
 
-func runCommands(commands [][]string) error {
-	for _, nameAndArgs := range commands {
-		if err := runCommand(nameAndArgs...); err != nil {
+	var config *Config
+FOR:
+	for _, configDir := range bds.ConfigDirs {
+		name := path.Join(configDir, "forge", "forge.toml")
+		switch c, err := newConfigFromFile(name); {
+		case errors.Is(err, fs.ErrNotExist):
+		case err != nil:
 			return err
+		default:
+			config = c
+			break FOR
 		}
 	}
+	if config == nil {
+		return errors.New("no config")
+	}
+
+	create := pflag.BoolP("create", "c", false, "create repo")
+	dryRun := pflag.BoolP("dry-run", "n", false, "dry run")
+	execShell := pflag.BoolP("shell", "s", false, "exec shell instead of editor")
+	goDoc := pflag.BoolP("doc", "d", false, "open pkg.go.dev documentation in web browser")
+	verbose := pflag.BoolP("verbose", "v", false, "verbose")
+	web := pflag.BoolP("web", "w", false, "open repo in web browser")
+	pflag.Parse()
+
+	if pflag.NArg() != 1 {
+		return fmt.Errorf("syntax: %s [flags] [[forge/]user/]repo[@remote]|alias", path.Base(os.Args[0]))
+	}
+
+	repo, err := config.parseRepoFromArg(pflag.Arg(0))
+	if err != nil {
+		return err
+	}
+
+	if repo.Remote == "" && repo.User == "_" && repo.Repo != "" {
+		var candidateUsers []string
+		forgeDirEntries, err := os.ReadDir(path.Join(config.SourceDir, repo.Forge))
+		if err != nil {
+			return err
+		}
+		for _, forgeDirEntry := range forgeDirEntries {
+			if !forgeDirEntry.IsDir() {
+				continue
+			}
+			candidateUser := forgeDirEntry.Name()
+			if candidateUser == "." || candidateUser == ".." {
+				continue
+			}
+			switch fileInfo, err := os.Stat(path.Join(config.SourceDir, repo.Forge, candidateUser, repo.Repo)); {
+			case errors.Is(err, fs.ErrNotExist):
+			case err != nil:
+				return err
+			case fileInfo.IsDir():
+				candidateUsers = append(candidateUsers, candidateUser)
+			}
+		}
+		switch len(candidateUsers) {
+		case 0:
+			return fmt.Errorf("%s/_/%s: no user found", repo.Forge, repo.Repo)
+		case 1:
+			repo.User = candidateUsers[0]
+			repo.RepoDir = path.Join(config.SourceDir, repo.Forge, repo.User, repo.Repo)
+		default:
+			return fmt.Errorf("%s/_/%s: multiple users found: %s", repo.Forge, repo.Repo, strings.Join(candidateUsers, ", "))
+		}
+	}
+
+	var cmds []*exec.Cmd
+	var url string
+	var chdir string
+	var execArgv []string
+
+	if repo.Remote == "" && !*goDoc && !*web {
+		switch _, err := os.Stat(repo.RepoDir); {
+		case err == nil:
+		case errors.Is(err, fs.ErrNotExist):
+			var repoURL string
+			if repo.User == config.User {
+				repoURL = "git@" + repo.Forge + ":" + repo.User + "/" + repo.Repo + ".git"
+			} else {
+				repoURL = "https://" + repo.Forge + "/" + repo.User + "/" + repo.Repo + ".git"
+			}
+			if *create {
+				cmds = []*exec.Cmd{
+					exec.Command("git", "init", repo.RepoDir),
+					exec.Command("git", "remote", "add", "origin", repoURL),
+				}
+			} else {
+				cmds = []*exec.Cmd{
+					exec.Command("git", "clone", repoURL, repo.RepoDir),
+				}
+			}
+		default:
+			return err
+		}
+
+	}
+
+	switch {
+	case *execShell:
+		currentUserShell, _ := shell.CurrentUserShell()
+		chdir = repo.RepoDir
+		execArgv = []string{currentUserShell}
+	case *goDoc:
+		url = repo.goDocURL()
+	case *web:
+		url = repo.url()
+	default:
+		if repo.Remote == "" {
+			execArgv = []string{config.Editor, repo.RepoDir}
+		} else {
+			execArgv = []string{config.Editor, "--folder-uri", repo.vsCodeRemoteURL()}
+		}
+	}
+
+	for _, cmd := range cmds {
+		if *verbose {
+			fmt.Println(strings.Join(cmd.Args, " "))
+		}
+		if !*dryRun {
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); cmd != nil {
+				return err
+			}
+		}
+	}
+
+	if url != "" {
+		switch runtime.GOOS {
+		case "darwin":
+			execArgv = []string{"open", url}
+		default:
+			execArgv = []string{"xdg-open", url}
+		}
+	}
+
+	if chdir != "" {
+		if *verbose {
+			fmt.Println("cd", chdir)
+		}
+		if !*dryRun {
+			if err := os.Chdir(chdir); err != nil {
+				return err
+			}
+		}
+	}
+
+	if execArgv != nil {
+		execArgv0, err := exec.LookPath(execArgv[0])
+		if err != nil {
+			return err
+		}
+		if *verbose {
+			fmt.Println("exec", execArgv0, strings.Join(execArgv[1:], " "))
+		}
+		if !*dryRun {
+			return unix.Exec(execArgv0, execArgv, os.Environ())
+		}
+	}
+
 	return nil
+}
+
+func main() {
+	switch err, exitError := run(), (&exec.ExitError{}); {
+	case errors.As(err, &exitError):
+		os.Exit(exitError.ExitCode())
+	case err != nil:
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
