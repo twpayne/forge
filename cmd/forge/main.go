@@ -81,7 +81,7 @@ func run() error {
 		chdir = repo.RepoDir
 		execArgv = []string{currentUserShell}
 	case *goDoc:
-		url = repo.GoDocURL()
+		url = repo.PkgGoDevURL()
 	case *web:
 		url = repo.URL()
 	default:

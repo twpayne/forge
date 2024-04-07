@@ -20,7 +20,10 @@ import (
 
 const defaultForge = "github.com"
 
-var argRx = regexp.MustCompile(`\A((?:(?P<forge>[^/]+)/)?(?:(?P<user>[^/]+)/))?(?P<repo>[^/@]+)(?:@(?P<remote>[^/]+))?`) // FIXME use .*? instead of [^/] and [^/@]
+var (
+	ArgPlaceHolder = "[[forge/]user/]repo[@remote]|alias"
+	ArgRx          = regexp.MustCompile(`\A((?:(?P<forge>[^/]+)/)?(?:(?P<user>[^/]+)/))?(?P<repo>[^/@]+)(?:@(?P<remote>[^/]+))?`) // FIXME use .*? instead of [^/] and [^/@]
+)
 
 type Config struct {
 	User      string                  `toml:"user"`
@@ -77,7 +80,7 @@ func NewDefaultConfig() (*Config, error) {
 		switch config, err := NewConfigFromFile(name); {
 		case errors.Is(err, fs.ErrNotExist):
 		case err != nil:
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", name, err)
 		default:
 			return config, nil
 		}
@@ -102,15 +105,15 @@ func (c *Config) ParseRepoFromArg(arg string) (*Repo, error) {
 			Remote:  alias.Remote,
 		}
 	} else {
-		match := argRx.FindStringSubmatch(arg)
+		match := ArgRx.FindStringSubmatch(arg)
 		if len(match) == 0 {
 			return nil, fmt.Errorf("%s: invalid argument", arg)
 		}
 		repo = Repo{
-			Forge:  firstNonZero(match[argRx.SubexpIndex("forge")], c.Forge, defaultForge),
-			User:   firstNonZero(match[argRx.SubexpIndex("user")], c.User, defaultUser.Username),
-			Repo:   match[argRx.SubexpIndex("repo")],
-			Remote: match[argRx.SubexpIndex("remote")],
+			Forge:  firstNonZero(match[ArgRx.SubexpIndex("forge")], c.Forge, defaultForge),
+			User:   firstNonZero(match[ArgRx.SubexpIndex("user")], c.User, defaultUser.Username),
+			Repo:   match[ArgRx.SubexpIndex("repo")],
+			Remote: match[ArgRx.SubexpIndex("remote")],
 		}
 
 		if repo.Remote == "" && repo.User == "_" && repo.Repo != "" {
@@ -174,7 +177,7 @@ func (r *Repo) GitURL(config *Config) string {
 	return "https://" + r.Forge + "/" + r.User + "/" + r.Repo + ".git"
 }
 
-func (r *Repo) GoDocURL() string {
+func (r *Repo) PkgGoDevURL() string {
 	// FIXME add package version
 	return "https://pkg.go.dev/" + r.Forge + "/" + r.User + "/" + r.Repo
 }

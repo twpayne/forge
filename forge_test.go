@@ -44,10 +44,10 @@ func TestArgRx(t *testing.T) {
 		},
 	} {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			matches := argRx.FindStringSubmatch(tc.arg)
+			matches := ArgRx.FindStringSubmatch(tc.arg)
 			assert.NotZero(t, matches)
 			for subexpName, subexpValue := range tc.matches {
-				assert.Equal(t, subexpValue, matches[argRx.SubexpIndex(subexpName)])
+				assert.Equal(t, subexpValue, matches[ArgRx.SubexpIndex(subexpName)])
 			}
 		})
 	}
