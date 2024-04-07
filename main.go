@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/user"
 	"path"
 	"regexp"
 	"runtime"
@@ -68,12 +69,17 @@ func newConfigFromFile(name string) (*Config, error) {
 }
 
 func (c *Config) parseRepoFromArg(arg string) (*Repo, error) {
+	defaultUser, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+
 	var repo Repo
 	if alias, ok := c.Aliases[arg]; ok {
 		repo = Repo{
 			RepoDir: alias.RepoDir,
-			Forge:   firstNonZero(alias.Forge, c.Forge),
-			User:    firstNonZero(alias.User, c.User),
+			Forge:   firstNonZero(alias.Forge, c.Forge, "github.com"),
+			User:    firstNonZero(alias.User, c.User, defaultUser.Username),
 			Repo:    alias.Repo,
 			Remote:  alias.Remote,
 		}
@@ -83,20 +89,23 @@ func (c *Config) parseRepoFromArg(arg string) (*Repo, error) {
 			return nil, fmt.Errorf("%s: invalid argument", arg)
 		}
 		repo = Repo{
-			Forge:  firstNonZero(match[argRx.SubexpIndex("forge")], c.Forge),
-			User:   firstNonZero(match[argRx.SubexpIndex("user")], c.User),
+			Forge:  firstNonZero(match[argRx.SubexpIndex("forge")], c.Forge, "github.com"),
+			User:   firstNonZero(match[argRx.SubexpIndex("user")], c.User, defaultUser.Username),
 			Repo:   match[argRx.SubexpIndex("repo")],
 			Remote: match[argRx.SubexpIndex("remote")],
 		}
 	}
+
 	if remoteConfig, ok := c.Remotes[repo.Remote]; ok {
 		repo.SourceDir = firstNonZero(remoteConfig.SourceDir, c.SourceDir)
 		repo.Hostname = remoteConfig.Hostname
 	}
+
 	if repo.RepoDir == "" {
 		sourceDir := firstNonZero(repo.SourceDir, c.SourceDir)
 		repo.RepoDir = path.Join(sourceDir, repo.Forge, repo.User, repo.Repo)
 	}
+
 	return &repo, nil
 }
 
