@@ -166,8 +166,7 @@ func main() {
 			}, "\n")
 			cmd = exec.Command("osascript", "-e", script)
 		default:
-			log.Println("unimplemented")
-			return false
+			cmd = exec.Command("gnome-terminal", "--working-directory", repo.RepoDir)
 		}
 		if err := cmd.Run(); err != nil {
 			log.Println(err)
