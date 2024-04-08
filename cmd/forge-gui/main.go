@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -175,15 +176,13 @@ func main() {
 		return true
 	}
 
-	openURL := func(url string) bool {
-		var cmd *exec.Cmd
-		switch runtime.GOOS {
-		case "darwin":
-			cmd = exec.Command("open", url)
-		default:
-			cmd = exec.Command("xdg-open", url)
+	openURL := func(urlStr string) bool {
+		url, err := url.Parse(urlStr)
+		if err != nil {
+			log.Println(err)
+			return false
 		}
-		if err := cmd.Run(); err != nil {
+		if err := app.OpenURL(url); err != nil {
 			log.Println(err)
 			return false
 		}
