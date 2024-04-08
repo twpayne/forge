@@ -249,6 +249,6 @@ func main() {
 	))
 
 	window.Canvas().Focus(repoEntry)
-
+	window.CenterOnScreen()
 	window.ShowAndRun()
 }
