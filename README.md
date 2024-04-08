@@ -6,6 +6,15 @@ forge is primarily designed for my personal workflow, but might be useful to
 others who use VSCode, work on multiple GitHub projects, and use VSCode's Remote
 SSH extension. There are certainly many bugs.
 
+## Installation
+
+Run:
+
+```console
+$ go install github.com/twpayne/forge/cmd/forge@latest
+$ go install github.com/twpayne/forge/cmd/forge-gui@latest
+```
+
 ## Configuration
 
 Create `~/.config/forge/forge.toml` containing something like:
