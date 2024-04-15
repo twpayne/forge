@@ -185,7 +185,7 @@ func (r *Repo) PkgGoDevURL() string {
 func (r *Repo) InitWithRemoteCmds(config *Config) []*exec.Cmd {
 	return []*exec.Cmd{
 		exec.Command("git", "init", r.RepoDir),
-		exec.Command("git", "remote", "add", "origin", r.GitURL(config)),
+		exec.Command("git", "-C", r.RepoDir, "remote", "add", "origin", r.GitURL(config)),
 	}
 }
 
