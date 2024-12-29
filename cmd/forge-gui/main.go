@@ -1,11 +1,13 @@
 package main
 
+// FIXME Use WezTerm, not iTerm2
 // FIXME Open VS Code remotes does not seem to work when launched via Hammerspoon
+// FIXME Show live fuzzy matches in a drop-down
+// FIXME Add shell on remote (ssh with cd to working dir)
 
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
 	"os/exec"
 	"runtime"
@@ -16,10 +18,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/twpayne/forge"
+	"github.com/twpayne/forge/pkg/forge"
 )
 
 var errInvalid = errors.New("invalid")
@@ -81,6 +82,7 @@ func (e *entryWithShortcuts) TypedShortcut(shortcut fyne.Shortcut) {
 
 func main() {
 	app := app.New()
+
 	doAndQuit := func(f func() bool) func() {
 		return func() {
 			if f() {
@@ -89,69 +91,48 @@ func main() {
 		}
 	}
 
-	config, err := forge.NewDefaultConfig()
-	if err != nil {
-		// FIXME add Enter shortcut to close
-		w := app.NewWindow("Forge Error")
-		closeButton := widget.NewButton("Quit", app.Quit)
-		w.SetContent(container.NewVBox(
-			container.NewHBox(
-				widget.NewIcon(theme.ErrorIcon()),
-				widget.NewLabel(err.Error()),
-			),
-			closeButton,
-		))
-		w.Canvas().Focus(closeButton)
-		w.ShowAndRun()
-		return
-	}
+	patternBinding := binding.NewString()
 
-	argBinding := binding.NewString()
-	getRepo := func() (*forge.Repo, bool) {
-		argStr, err := argBinding.Get()
+	reposersCache := forge.NewReposersCache()
+	getRepo := func() *forge.Repo {
+		pattern, err := patternBinding.Get()
 		if err != nil {
-			log.Println(err)
-			return nil, false
+			fmt.Println(err)
+			return nil
 		}
-		if !forge.ArgRx.MatchString(argStr) {
-			log.Printf("%s: invalid", argBinding)
-			return nil, false
+		switch repo, err := reposersCache.FindRepo(pattern); {
+		case err != nil:
+			return nil
+		case repo == nil:
+			return nil
+		default:
+			return repo
 		}
-		repo, err := config.ParseRepoFromArg(argStr)
-		if err != nil {
-			log.Println(err)
-			return nil, false
-		}
-		return repo, true
 	}
 
 	openVSCode := func() bool {
-		repo, ok := getRepo()
-		if !ok {
+		repo := getRepo()
+		if repo == nil {
 			return false
 		}
 		var cmd *exec.Cmd
 		switch runtime.GOOS {
 		case "darwin":
-			script := fmt.Sprintf(`tell application "Visual Studio Code" to open %q`, repo.RepoDir)
+			script := fmt.Sprintf(`tell application "Visual Studio Code" to open %q`, repo.WorkingDir)
 			cmd = exec.Command("osascript", "-e", script)
 		default:
-			if repo.Remote == "" {
-				cmd = exec.Command(config.Editor, repo.RepoDir)
-			} else {
-				cmd = exec.Command(config.Editor, "--folder-uri", repo.VSCodeRemoteURL())
-			}
+			cmd = exec.Command("code", repo.VSCodeOpenArgs...)
 		}
 		if err := cmd.Run(); err != nil {
-			log.Println(err)
+			fmt.Println(err)
 			return false
 		}
 		return true
 	}
 
 	openShell := func() bool {
-		repo, ok := getRepo()
-		if !ok {
+		repo := getRepo()
+		if repo == nil {
 			return false
 		}
 		var cmd *exec.Cmd
@@ -161,16 +142,16 @@ func main() {
 				`tell application "iTerm2"`,
 				`  set newWindow to (create window with default profile)`,
 				`  tell current session of newWindow`,
-				`	  write text "cd ` + repo.RepoDir + `"`,
+				`	  write text "cd ` + repo.WorkingDir + `"`,
 				`  end tell`,
 				`end tell`,
 			}, "\n")
 			cmd = exec.Command("osascript", "-e", script)
 		default:
-			cmd = exec.Command("gnome-terminal", "--working-directory", repo.RepoDir)
+			cmd = exec.Command("gnome-terminal", "--working-directory", repo.WorkingDir)
 		}
 		if err := cmd.Run(); err != nil {
-			log.Println(err)
+			fmt.Println(err)
 			return false
 		}
 		return true
@@ -179,19 +160,19 @@ func main() {
 	openURL := func(urlStr string) bool {
 		url, err := url.Parse(urlStr)
 		if err != nil {
-			log.Println(err)
+			fmt.Println(err)
 			return false
 		}
 		if err := app.OpenURL(url); err != nil {
-			log.Println(err)
+			fmt.Println(err)
 			return false
 		}
 		return true
 	}
 
 	openPkgGoDev := func() bool {
-		repo, ok := getRepo()
-		if !ok {
+		repo := getRepo()
+		if repo == nil {
 			return false
 		}
 		if !openURL(repo.PkgGoDevURL()) {
@@ -201,8 +182,8 @@ func main() {
 	}
 
 	openWebsite := func() bool {
-		repo, ok := getRepo()
-		if !ok {
+		repo := getRepo()
+		if repo == nil {
 			return false
 		}
 		if !openURL(repo.URL()) {
@@ -214,11 +195,10 @@ func main() {
 	window := app.NewWindow("Forge")
 
 	repoEntry := newEntryWithShortcuts()
-	repoEntry.Bind(argBinding)
-	repoEntry.PlaceHolder = forge.ArgPlaceHolder
+	repoEntry.Bind(patternBinding)
 	repoEntry.Validator = func(text string) error {
-		if !forge.ArgRx.MatchString(text) {
-			return errInvalid
+		if repo := getRepo(); repo == nil {
+			return errors.New("no match")
 		}
 		return nil
 	}
