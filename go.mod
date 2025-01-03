@@ -4,7 +4,7 @@ go 1.23.4
 
 require (
 	fyne.io/fyne/v2 v2.5.3
-	github.com/sahilm/fuzzy v0.1.1
+	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/spf13/pflag v1.0.5
 	github.com/twpayne/go-shell v0.5.0
 	golang.org/x/sys v0.28.0
@@ -13,6 +13,7 @@ require (
 require (
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/alecthomas/repr v0.4.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fredbi/uri v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
@@ -25,9 +26,9 @@ require (
 	github.com/go-text/typesetting v0.2.1 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
+	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/jeandeaual/go-locale v0.0.0-20241217141322-fcc2cadd6f08 // indirect
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.4.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rymdport/portal v0.3.0 // indirect

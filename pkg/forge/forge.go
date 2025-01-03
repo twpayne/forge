@@ -1,19 +1,14 @@
 package forge
 
 import (
+	"cmp"
 	_ "embed"
+	"slices"
 	"strings"
-
-	"github.com/sahilm/fuzzy"
 )
 
 //go:embed list-repos.sh
 var listReposSh string
-
-type reposSource []*Repo
-
-func (s reposSource) Len() int            { return len(s) }
-func (s reposSource) String(i int) string { return s[i].Name }
 
 type ReposersCache struct {
 	localRepos  []*Repo
@@ -26,7 +21,7 @@ func NewReposersCache() *ReposersCache {
 	}
 }
 
-func (c *ReposersCache) FindRepo(arg string) (*Repo, error) {
+func (c *ReposersCache) FindRepos(arg string) ([]*Repo, error) {
 	var repos []*Repo
 	var pattern string
 	if host, patternStr, ok := strings.Cut(arg, ":"); ok {
@@ -50,16 +45,28 @@ func (c *ReposersCache) FindRepo(arg string) (*Repo, error) {
 		}
 		repos = c.localRepos
 	}
-	matches := fuzzy.FindFrom(pattern, reposSource(repos))
-	if len(matches) == 0 {
-		return nil, nil
+	return findRepos(repos, pattern), nil
+}
+
+func findRepos(repos []*Repo, pattern string) []*Repo {
+	if pattern == "" {
+		return nil
 	}
+	patternComponents := strings.Split(pattern, "/")
+	var matchingRepos []*Repo
 	for _, repo := range repos {
-		if repo.Name == matches[0].Str {
-			return repo, nil
+		repoComponents := strings.Split(repo.Name, "/")
+		if len(repoComponents) < len(patternComponents) {
+			continue
+		}
+		if slices.Equal(repoComponents[len(repoComponents)-len(patternComponents):], patternComponents) {
+			matchingRepos = append(matchingRepos, repo)
 		}
 	}
-	return nil, nil
+	slices.SortFunc(matchingRepos, func(a, b *Repo) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	return matchingRepos
 }
 
 func getNameAndWorkingDir(dir string) (name string, workingDir string) {

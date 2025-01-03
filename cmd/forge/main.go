@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/pflag"
 	"github.com/twpayne/go-shell"
@@ -21,12 +22,23 @@ func run() error {
 	if pflag.NArg() != 1 {
 		return fmt.Errorf("expected exactly 1 argument, got %d", pflag.NArg())
 	}
+	pattern := pflag.Arg(0)
 
 	reposCache := forge.NewReposersCache()
-	repo, err := reposCache.FindRepo(pflag.Arg(0))
-	if err != nil {
+	repos, err := reposCache.FindRepos(pattern)
+	switch {
+	case err != nil:
 		return err
+	case len(repos) == 0:
+		return fmt.Errorf("%s: not found", pattern)
+	case len(repos) > 2:
+		repoNames := make([]string, len(repos))
+		for i, repo := range repos {
+			repoNames[i] = repo.Name
+		}
+		return fmt.Errorf("%s: ambiguous pattern (%s)", pattern, strings.Join(repoNames, ", "))
 	}
+	repo := repos[0]
 
 	var url string
 	var chdir string

@@ -2,7 +2,7 @@ package main
 
 // FIXME Use WezTerm, not iTerm2
 // FIXME Open VS Code remotes does not seem to work when launched via Hammerspoon
-// FIXME Show live fuzzy matches in a drop-down
+// FIXME Show matches in a drop-down
 // FIXME Add shell on remote (ssh with cd to working dir)
 
 import (
@@ -100,13 +100,13 @@ func main() {
 			fmt.Println(err)
 			return nil
 		}
-		switch repo, err := reposersCache.FindRepo(pattern); {
+		switch repos, err := reposersCache.FindRepos(pattern); {
 		case err != nil:
 			return nil
-		case repo == nil:
-			return nil
+		case len(repos) == 1:
+			return repos[0]
 		default:
-			return repo
+			return nil
 		}
 	}
 
