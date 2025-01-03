@@ -30,6 +30,7 @@ func (r *SSHRemote) Repos() ([]*Repo, error) {
 		name, workingDir := getNameAndWorkingDir(dir)
 		repo := &Repo{
 			Name:           name,
+			Host:           r.host,
 			WorkingDir:     workingDir,
 			VSCodeOpenArgs: []string{"--folder-uri", "vscode-remote://ssh-remote+" + r.host + workingDir},
 		}

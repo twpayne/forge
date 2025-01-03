@@ -2,6 +2,7 @@ package forge
 
 type Repo struct {
 	Name           string
+	Host           string
 	WorkingDir     string
 	VSCodeOpenArgs []string
 }

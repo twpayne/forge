@@ -1,9 +1,7 @@
 package main
 
-// FIXME Use WezTerm, not iTerm2
-// FIXME Open VS Code remotes does not seem to work when launched via Hammerspoon
-// FIXME Show matches in a drop-down
-// FIXME Add shell on remote (ssh with cd to working dir)
+// FIXME find out how to open VSCode remote SSH URLs on darwin
+// FIXME find out how to open a terminal on darwin
 
 import (
 	"errors"
@@ -11,7 +9,6 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
-	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -116,12 +113,14 @@ func main() {
 			return false
 		}
 		var cmd *exec.Cmd
-		switch runtime.GOOS {
-		case "darwin":
+		switch {
+		case runtime.GOOS == "darwin" && repo.Host == "":
 			script := fmt.Sprintf(`tell application "Visual Studio Code" to open %q`, repo.WorkingDir)
 			cmd = exec.Command("osascript", "-e", script)
-		default:
+		case runtime.GOOS != "darwin":
 			cmd = exec.Command("code", repo.VSCodeOpenArgs...)
+		default:
+			return false
 		}
 		if err := cmd.Run(); err != nil {
 			fmt.Println(err)
@@ -138,15 +137,7 @@ func main() {
 		var cmd *exec.Cmd
 		switch runtime.GOOS {
 		case "darwin":
-			script := strings.Join([]string{
-				`tell application "iTerm2"`,
-				`  set newWindow to (create window with default profile)`,
-				`  tell current session of newWindow`,
-				`	  write text "cd ` + repo.WorkingDir + `"`,
-				`  end tell`,
-				`end tell`,
-			}, "\n")
-			cmd = exec.Command("osascript", "-e", script)
+			cmd = exec.Command("wezterm", "cli", "--spawn", repo.WorkingDir) // FIXME
 		default:
 			cmd = exec.Command("gnome-terminal", "--working-directory", repo.WorkingDir)
 		}
