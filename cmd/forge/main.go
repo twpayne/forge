@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"runtime"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 )
 
 func run() error {
+	clone := pflag.BoolP("clone", "c", false, "clone repo if it does not already exist")
 	execShell := pflag.BoolP("shell", "s", false, "exec shell in working directory")
 	goDoc := pflag.BoolP("doc", "d", false, "open pkg.go.dev documentation")
 	web := pflag.BoolP("web", "w", false, "open home page")
@@ -24,21 +26,53 @@ func run() error {
 	}
 	pattern := pflag.Arg(0)
 
+	var repo *forge.Repo
 	reposCache := forge.NewReposersCache()
 	repos, err := reposCache.FindRepos(pattern)
 	switch {
 	case err != nil:
 		return err
 	case len(repos) == 0:
-		return fmt.Errorf("%s: not found", pattern)
-	case len(repos) > 2:
+		if !*clone {
+			return fmt.Errorf("%s: not found", pattern)
+		}
+		components := strings.Split(pattern, "/")
+		if len(components) < 1 || 3 < len(components) {
+			return fmt.Errorf("%s: invalid pattern", pattern)
+		}
+		if len(components) < 2 {
+			components = []string{"twpayne", components[0]}
+		}
+		if len(components) < 3 {
+			components = []string{"github.com", components[0], components[1]}
+		}
+		userHomerDir, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		name := strings.Join(components, "/")
+		workingDir := path.Join(userHomerDir, "src", name)
+		repo = &forge.Repo{
+			Name:           name,
+			WorkingDir:     workingDir,
+			VSCodeOpenArgs: []string{workingDir},
+		}
+		cmd := exec.Command("git", "clone", "https://"+repo.Name+".git", repo.WorkingDir)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	case len(repos) == 1:
+		repo = repos[0]
+	default:
 		repoNames := make([]string, len(repos))
 		for i, repo := range repos {
 			repoNames[i] = repo.Name
 		}
 		return fmt.Errorf("%s: ambiguous pattern (%s)", pattern, strings.Join(repoNames, ", "))
 	}
-	repo := repos[0]
 
 	var url string
 	var chdir string
