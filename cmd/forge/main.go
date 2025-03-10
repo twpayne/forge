@@ -19,6 +19,7 @@ func run() error {
 	clone := pflag.BoolP("clone", "c", false, "clone repo if it does not already exist")
 	execShell := pflag.BoolP("shell", "s", false, "exec shell in working directory")
 	goDoc := pflag.BoolP("doc", "d", false, "open pkg.go.dev documentation")
+	open := pflag.BoolP("open", "o", false, "open folder")
 	web := pflag.BoolP("web", "w", false, "open home page")
 	pflag.Parse()
 	if pflag.NArg() != 1 {
@@ -85,6 +86,8 @@ func run() error {
 		execArgv = []string{currentUserShell}
 	case *goDoc:
 		url = repo.PkgGoDevURL()
+	case *open:
+		execArgv = []string{"open", repo.WorkingDir}
 	case *web:
 		url = repo.URL()
 	default:
