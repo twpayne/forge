@@ -28,6 +28,12 @@ func TestFindRepos(t *testing.T) {
 	}{
 		{
 			name: "empty",
+			expectedNames: []string{
+				"github.com/golang/go",
+				"github.com/halostatue/chezmoi",
+				"github.com/twpayne/chezmoi",
+				"github.com/twpayne/forge",
+			},
 		},
 		{
 			name:          "exact_repo",

@@ -50,7 +50,10 @@ func (c *ReposersCache) FindRepos(arg string) ([]*Repo, error) {
 
 func findRepos(repos []*Repo, pattern string) []*Repo {
 	if pattern == "" {
-		return nil
+		slices.SortFunc(repos, func(a, b *Repo) int {
+			return cmp.Compare(a.Name, b.Name)
+		})
+		return repos
 	}
 	patternComponents := strings.Split(pattern, "/")
 	var matchingRepos []*Repo

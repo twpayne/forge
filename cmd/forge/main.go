@@ -18,11 +18,12 @@ import (
 func run() error {
 	clone := pflag.BoolP("clone", "c", false, "clone repo if it does not already exist")
 	execShell := pflag.BoolP("shell", "s", false, "exec shell in working directory")
+	list := pflag.BoolP("list", "l", false, "list repos")
 	goDoc := pflag.BoolP("doc", "d", false, "open pkg.go.dev documentation")
 	open := pflag.BoolP("open", "o", false, "open folder")
 	web := pflag.BoolP("web", "w", false, "open home page")
 	pflag.Parse()
-	if pflag.NArg() != 1 {
+	if pflag.NArg() != 1 && !*list {
 		return fmt.Errorf("expected exactly 1 argument, got %d", pflag.NArg())
 	}
 	pattern := pflag.Arg(0)
@@ -33,6 +34,11 @@ func run() error {
 	switch {
 	case err != nil:
 		return err
+	case *list:
+		for _, repo := range repos {
+			fmt.Println(repo.WorkingDir)
+		}
+		return nil
 	case len(repos) == 0:
 		if !*clone {
 			return fmt.Errorf("%s: not found", pattern)
