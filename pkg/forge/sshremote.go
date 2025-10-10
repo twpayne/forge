@@ -21,13 +21,13 @@ func (r *SSHRemote) Repos() ([]*Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	dirs := strings.Split(string(output), "\x00")
-	repos := make([]*Repo, 0, len(dirs))
-	for _, dir := range dirs {
-		if dir == "" {
+	gitEntries := strings.Split(string(output), "\x00")
+	repos := make([]*Repo, 0, len(gitEntries))
+	for _, gitEntry := range gitEntries {
+		if gitEntry == "" {
 			continue
 		}
-		name, workingDir := getNameAndWorkingDir(dir)
+		name, workingDir := getNameAndWorkingDir(gitEntry)
 		repo := &Repo{
 			Name:           name,
 			Host:           r.host,
