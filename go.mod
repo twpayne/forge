@@ -1,6 +1,11 @@
 module github.com/twpayne/forge
 
-go 1.23.4
+go 1.24
+
+tool (
+	github.com/twpayne/forge/cmd/forge
+	github.com/twpayne/forge/cmd/forge-gui
+)
 
 require (
 	fyne.io/fyne/v2 v2.6.0
