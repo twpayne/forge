@@ -22,6 +22,7 @@ func run() error {
 	goDoc := pflag.BoolP("doc", "d", false, "open pkg.go.dev documentation")
 	open := pflag.BoolP("open", "o", false, "open folder")
 	web := pflag.BoolP("web", "w", false, "open home page")
+	zed := pflag.BoolP("zed", "z", false, "open repo in zed")
 	pflag.Parse()
 	if pflag.NArg() != 1 && !*list {
 		return fmt.Errorf("expected exactly 1 argument, got %d", pflag.NArg())
@@ -96,6 +97,8 @@ func run() error {
 		execArgv = []string{"open", repo.WorkingDir}
 	case *web:
 		url = repo.URL()
+	case *zed:
+		execArgv = append([]string{"zed"}, repo.ZedOpenArgs...)
 	default:
 		execArgv = append([]string{"code"}, repo.VSCodeOpenArgs...)
 	}

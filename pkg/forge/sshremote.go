@@ -33,6 +33,7 @@ func (r *SSHRemote) Repos() ([]*Repo, error) {
 			Host:           r.host,
 			WorkingDir:     workingDir,
 			VSCodeOpenArgs: []string{"--folder-uri", "vscode-remote://ssh-remote+" + r.host + workingDir},
+			ZedOpenArgs:    []string{"ssh://" + r.host + workingDir},
 		}
 		repos = append(repos, repo)
 	}

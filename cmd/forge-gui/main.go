@@ -183,6 +183,28 @@ func main() {
 		return true
 	}
 
+	openZed := func() bool {
+		repo := getRepo()
+		if repo == nil {
+			return false
+		}
+		var cmd *exec.Cmd
+		switch {
+		case runtime.GOOS == "darwin" && repo.Host == "":
+			script := fmt.Sprintf(`tell application "Zed" to open %q`, repo.WorkingDir)
+			cmd = exec.Command("osascript", "-e", script)
+		case runtime.GOOS != "darwin":
+			cmd = exec.Command("zed", repo.ZedOpenArgs...)
+		default:
+			return false
+		}
+		if err := cmd.Run(); err != nil {
+			fmt.Println(err)
+			return false
+		}
+		return true
+	}
+
 	window := app.NewWindow("Forge")
 
 	repoEntry := newEntryWithShortcuts()
@@ -200,6 +222,7 @@ func main() {
 		fyne.KeyS: doAndQuit(openShell),
 		fyne.KeyW: doAndQuit(openWebsite),
 		fyne.KeyP: doAndQuit(openPkgGoDev),
+		fyne.KeyZ: doAndQuit(openZed),
 	} {
 		desktopCustomShortcut := desktop.CustomShortcut{
 			KeyName:  keyName,
@@ -212,6 +235,7 @@ func main() {
 		repoEntry,
 		container.NewHBox(
 			newReturnButton("Code", doAndQuit(openVSCode)),
+			newReturnButton("Zed", doAndQuit(openZed)),
 			widget.NewButton("Shell", doAndQuit(openShell)),
 			widget.NewButton("Website", doAndQuit(openWebsite)),
 			widget.NewButton("pkg.go.dev", doAndQuit(openPkgGoDev)),

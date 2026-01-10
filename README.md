@@ -3,8 +3,8 @@
 forge is a simple utility to clone and open local and remote git repos.
 
 forge is primarily designed for my personal workflow, but might be useful to
-others who use VSCode, work on multiple GitHub projects, and use VSCode's Remote
-SSH extension. There are certainly many bugs.
+others who use VSCode or Zed, work on multiple GitHub projects, and use VSCode
+or Zed's Remote SSH support. There are certainly many bugs.
 
 ## Installation
 
@@ -30,6 +30,7 @@ Other flags control the action taken:
 | `-s` | Open the working copy in a shell |
 | `-w` | Open the project's repo in your web browser |
 | `-d` | Open the project's documentation on pkg.go.dev in your web browser |
+| `-z` | Open the working copy in Zed |
 
 ## Graphical user interface
 
@@ -46,6 +47,7 @@ Shortcuts:
 | `Alt+S`            | Open the working copy in a shell                                   |
 | `Alt+W`            | Open the project's repo in your web browser                        |
 | `Alt+P`            | Open the project's documentation on pkg.go.dev in your web browser |
+| `Alt+Z`            | Open the working copy in Zed                                       |
 
 ## License
 
