@@ -97,7 +97,7 @@ func main() {
 			fmt.Println(err)
 			return nil
 		}
-		switch repos, err := reposersCache.FindRepos(pattern); {
+		switch repos, err := reposersCache.FuzzyFindRepos(pattern); {
 		case err != nil:
 			return nil
 		case len(repos) == 1:

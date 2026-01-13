@@ -17,6 +17,7 @@ import (
 
 func run() error {
 	clone := pflag.BoolP("clone", "c", false, "clone repo if it does not already exist")
+	exact := pflag.BoolP("exact", "e", false, "match repo name exactly")
 	execShell := pflag.BoolP("shell", "s", false, "exec shell in working directory")
 	list := pflag.BoolP("list", "l", false, "list repos")
 	goDoc := pflag.BoolP("doc", "d", false, "open pkg.go.dev documentation")
@@ -31,7 +32,11 @@ func run() error {
 
 	var repo *forge.Repo
 	reposCache := forge.NewReposersCache()
-	repos, err := reposCache.FindRepos(pattern)
+	findRepos := reposCache.FuzzyFindRepos
+	if *exact {
+		findRepos = reposCache.FindRepos
+	}
+	repos, err := findRepos(pattern)
 	switch {
 	case err != nil:
 		return err

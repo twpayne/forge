@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"slices"
 	"strings"
+
+	"github.com/sahilm/fuzzy"
 )
 
 //go:embed list-repos.sh
@@ -22,38 +24,15 @@ func NewReposersCache() *ReposersCache {
 }
 
 func (c *ReposersCache) FindRepos(arg string) ([]*Repo, error) {
-	var repos []*Repo
-	var pattern string
-	if host, patternStr, ok := strings.Cut(arg, ":"); ok {
-		if _, ok := c.reposByHost[host]; !ok {
-			repos, err := NewRemoteSSH(host).Repos()
-			if err != nil {
-				return nil, err
-			}
-			c.reposByHost[host] = repos
-		}
-		pattern = patternStr
-		repos = c.reposByHost[host]
-	} else {
-		pattern = arg
-		if c.localRepos == nil {
-			var err error
-			c.localRepos, err = NewLocal().Repos()
-			if err != nil {
-				return nil, err
-			}
-		}
-		repos = c.localRepos
+	repos, pattern, err := c.loadRepos(arg)
+	if err != nil {
+		return nil, err
 	}
-	return findRepos(repos, pattern), nil
-}
-
-func findRepos(repos []*Repo, pattern string) []*Repo {
 	if pattern == "" {
 		slices.SortFunc(repos, func(a, b *Repo) int {
 			return cmp.Compare(a.Name, b.Name)
 		})
-		return repos
+		return repos, nil
 	}
 	patternComponents := strings.Split(pattern, "/")
 	var matchingRepos []*Repo
@@ -69,8 +48,52 @@ func findRepos(repos []*Repo, pattern string) []*Repo {
 	slices.SortFunc(matchingRepos, func(a, b *Repo) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
-	return matchingRepos
+	return matchingRepos, nil
 }
+
+func (c *ReposersCache) FuzzyFindRepos(arg string) ([]*Repo, error) {
+	repos, pattern, err := c.loadRepos(arg)
+	if err != nil {
+		return nil, err
+	}
+	matches := fuzzy.FindFrom(pattern, reposSource(repos))
+	if len(matches) == 0 {
+		return nil, nil
+	}
+	return repos[matches[0].Index : matches[0].Index+1], nil
+}
+
+func (c *ReposersCache) loadRepos(arg string) ([]*Repo, string, error) {
+	var repos []*Repo
+	var pattern string
+	if host, patternStr, ok := strings.Cut(arg, ":"); ok {
+		if _, ok := c.reposByHost[host]; !ok {
+			repos, err := NewRemoteSSH(host).Repos()
+			if err != nil {
+				return nil, "", err
+			}
+			c.reposByHost[host] = repos
+		}
+		pattern = patternStr
+		repos = c.reposByHost[host]
+	} else {
+		pattern = arg
+		if c.localRepos == nil {
+			var err error
+			c.localRepos, err = NewLocal().Repos()
+			if err != nil {
+				return nil, "", err
+			}
+		}
+		repos = c.localRepos
+	}
+	return repos, pattern, nil
+}
+
+type reposSource []*Repo
+
+func (s reposSource) Len() int            { return len(s) }
+func (s reposSource) String(i int) string { return s[i].Name }
 
 func getNameAndWorkingDir(dir string) (name string, workingDir string) {
 	components := strings.Split(dir, "/")
