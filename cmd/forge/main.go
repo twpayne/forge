@@ -22,6 +22,7 @@ func run() error {
 	list := pflag.BoolP("list", "l", false, "list repos")
 	goDoc := pflag.BoolP("doc", "d", false, "open pkg.go.dev documentation")
 	open := pflag.BoolP("open", "o", false, "open folder")
+	ssh := pflag.Bool("ssh", false, "clone with ssh")
 	web := pflag.BoolP("web", "w", false, "open home page")
 	zed := pflag.BoolP("zed", "z", false, "open repo in zed")
 	pflag.Parse()
@@ -70,7 +71,14 @@ func run() error {
 			WorkingDir:     workingDir,
 			VSCodeOpenArgs: []string{workingDir},
 		}
-		cmd := exec.Command("git", "clone", "https://"+repo.Name+".git", repo.WorkingDir)
+		var cloneRepo string
+		if *ssh {
+			host, path, _ := strings.Cut(repo.Name, "/")
+			cloneRepo = "git@" + host + ":" + path + ".git"
+		} else {
+			cloneRepo = "https://" + repo.Name + ".git"
+		}
+		cmd := exec.Command("git", "clone", cloneRepo, repo.WorkingDir)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
