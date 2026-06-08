@@ -7,9 +7,9 @@ is_command() {
 }
 
 if is_command fdfind; then
-    fdfind --absolute-path --case-sensitive --color=never --max-depth=4 --print0 --unrestricted "^\.git$" "${HOME}/src"
+    fdfind --absolute-path --case-sensitive --color=never --max-depth=4 --print0 --unrestricted "^\.git$" "${HOME}/projects" "${HOME}/src"
 elif is_command fd; then
-    fd --absolute-path --case-sensitive --color=never --max-depth=4 --print0 --unrestricted "^\.git$" "${HOME}/src"
+    fd --absolute-path --case-sensitive --color=never --max-depth=4 --print0 --unrestricted "^\.git$" "${HOME}/projects" "${HOME}/src"
 elif is_command find; then
-    find "${HOME}/src" -maxdepth 4 -name .git -print0
+    find "${HOME}/projects" "${HOME}/src" -maxdepth 4 -name .git -print0
 fi
