@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -144,7 +145,11 @@ func run() error {
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Println(err)
+		if exitError, ok := errors.AsType[*exec.ExitError](err); ok {
+			_, _ = os.Stderr.Write(exitError.Stderr)
+		} else {
+			fmt.Println(err)
+		}
 		os.Exit(1)
 	}
 }
