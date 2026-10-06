@@ -12,6 +12,9 @@ import (
 //go:embed list-repos.sh
 var listReposSh string
 
+//go:embed list-repos.fish
+var listReposFish string
+
 type ReposersCache struct {
 	localRepos  []*Repo
 	reposByHost map[string][]*Repo
