@@ -7,9 +7,9 @@ function is_command
 end
 
 if is_command fdfind
-    fdfind --absolute-path --case-sensitive --color=never --max-depth=$max_depth --print0 --unrestricted "^\.git\$" "$HOME/projects" "$HOME/src"
+    fdfind --absolute-path --case-sensitive --color=never --hidden --max-depth=$max_depth --print0 --unrestricted "^\.git\$" "$HOME/projects" "$HOME/src"
 else if is_command fd
-    fd --absolute-path --case-sensitive --color=never --max-depth=$max_depth --print0 --unrestricted "^\.git\$" "$HOME/projects" "$HOME/src"
+    fd --absolute-path --case-sensitive --color=never --hidden --max-depth=$max_depth --print0 --unrestricted "^\.git\$" "$HOME/projects" "$HOME/src"
 else if is_command find
     find "$HOME/projects" "$HOME/src" -maxdepth $max_depth -name .git -print0
 end

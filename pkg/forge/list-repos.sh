@@ -9,9 +9,9 @@ is_command() {
 }
 
 if is_command fdfind; then
-    fdfind --absolute-path --case-sensitive --color=never --max-depth="${maxdepth}" --print0 --unrestricted "^\.git$" "${HOME}/projects" "${HOME}/src"
+    fdfind --absolute-path --case-sensitive --color=never --hidden --max-depth="${maxdepth}" --print0 --unrestricted "^\.git$" "${HOME}/projects" "${HOME}/src"
 elif is_command fd; then
-    fd --absolute-path --case-sensitive --color=never --max-depth="${maxdepth}" --print0 --unrestricted "^\.git$" "${HOME}/projects" "${HOME}/src"
+    fd --absolute-path --case-sensitive --color=never --hidden --max-depth="${maxdepth}" --print0 --unrestricted "^\.git$" "${HOME}/projects" "${HOME}/src"
 elif is_command find; then
     find "${HOME}/projects" "${HOME}/src" -maxdepth "${maxdepth}" -name .git -print0
 fi
