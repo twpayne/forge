@@ -17,15 +17,26 @@ import (
 )
 
 func run() error {
+	codePath, _ := exec.LookPath("code")
+	zedPath, _ := exec.LookPath("code")
+
+	defaultAction := "exec-shell"
+	switch {
+	case codePath != "":
+		defaultAction = "code"
+	case zedPath != "":
+		defaultAction = "zed"
+	}
+
 	clone := pflag.BoolP("clone", "c", false, "clone repo if it does not already exist")
 	exact := pflag.BoolP("exact", "e", false, "match repo name exactly")
-	execShell := pflag.BoolP("shell", "s", false, "exec shell in working directory")
+	execShell := pflag.BoolP("shell", "s", defaultAction == "exec-shell", "exec shell in working directory")
 	list := pflag.BoolP("list", "l", false, "list repos")
 	goDoc := pflag.BoolP("doc", "d", false, "open pkg.go.dev documentation")
 	open := pflag.BoolP("open", "o", false, "open folder")
 	ssh := pflag.Bool("ssh", false, "clone with ssh")
 	web := pflag.BoolP("web", "w", false, "open home page")
-	zed := pflag.BoolP("zed", "z", false, "open repo in zed")
+	zed := pflag.BoolP("zed", "z", defaultAction == "zed", "open repo in zed")
 	pflag.Parse()
 	if pflag.NArg() != 1 && !*list {
 		return fmt.Errorf("expected exactly 1 argument, got %d", pflag.NArg())
