@@ -5,7 +5,6 @@ type Repo struct {
 	Host           string
 	WorkingDir     string
 	VSCodeOpenArgs []string
-	ZedOpenArgs    []string
 }
 
 func (r Repo) PkgGoDevURL() string {

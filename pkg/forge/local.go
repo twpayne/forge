@@ -27,7 +27,6 @@ func (l *Local) Repos() ([]*Repo, error) {
 			Name:           name,
 			WorkingDir:     workingDir,
 			VSCodeOpenArgs: []string{workingDir},
-			ZedOpenArgs:    []string{workingDir},
 		}
 		repos = append(repos, repo)
 	}

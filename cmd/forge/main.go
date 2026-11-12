@@ -18,14 +18,11 @@ import (
 
 func run() error {
 	codePath, _ := exec.LookPath("code")
-	zedPath, _ := exec.LookPath("code")
 
 	defaultAction := "exec-shell"
 	switch {
 	case codePath != "":
 		defaultAction = "code"
-	case zedPath != "":
-		defaultAction = "zed"
 	}
 
 	clone := pflag.BoolP("clone", "c", false, "clone repo if it does not already exist")
@@ -36,7 +33,6 @@ func run() error {
 	open := pflag.BoolP("open", "o", false, "open folder")
 	ssh := pflag.Bool("ssh", false, "clone with ssh")
 	web := pflag.BoolP("web", "w", false, "open home page")
-	zed := pflag.BoolP("zed", "z", defaultAction == "zed", "open repo in zed")
 	pflag.Parse()
 	if pflag.NArg() != 1 && !*list {
 		return fmt.Errorf("expected exactly 1 argument, got %d", pflag.NArg())
@@ -122,8 +118,6 @@ func run() error {
 		execArgv = []string{"open", repo.WorkingDir}
 	case *web:
 		url = repo.URL()
-	case *zed:
-		execArgv = append([]string{"zed"}, repo.ZedOpenArgs...)
 	default:
 		execArgv = append([]string{"code"}, repo.VSCodeOpenArgs...)
 	}
